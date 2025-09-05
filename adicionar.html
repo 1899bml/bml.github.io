@@ -13,18 +13,28 @@
 </head>
 <body>
   <h1>Adicionar Sócio</h1>
-  <form id="formulario" method="GET" target="_blank" action="https://script.google.com/macros/s/AKfycbwb-CQFaOoxBWtaK8F3t109Y1YpxhctcHCPDdY7iqi-8WWntticm_Kb6eb7A780RCsi/exec">
+  <form id="formulario" method="GET" target="_blank" action="https://script.google.com/macros/s/YOUR_WEB_APP_URL/exec">
     <div id="campos-dinamicos"></div>
     <button type="submit">Submeter</button>
   </form>
   <a href="index.html">← Voltar ao painel</a>
   <script>
     const container = document.getElementById("campos-dinamicos");
-    const campos = JSON.parse(localStorage.getItem("camposConfigurados") || "[]");
+    let campos = JSON.parse(localStorage.getItem("camposConfigurados") || "[]");
+
+    if (campos.length === 0) {
+      campos = [
+        { nome: "nome", tipo: "text", visivel: true, obrigatorio: true, opcoes: [] },
+        { nome: "email", tipo: "email", visivel: true, obrigatorio: false, opcoes: [] },
+        { nome: "telefone", tipo: "number", visivel: true, obrigatorio: false, opcoes: [] },
+        { nome: "categoria", tipo: "select", visivel: true, obrigatorio: false, opcoes: ["Ativo", "Inativo", "Pendente"] },
+        { nome: "data", tipo: "date", visivel: true, obrigatorio: false, opcoes: [] },
+        { nome: "endereco", tipo: "text", visivel: true, obrigatorio: false, opcoes: [] }
+      ];
+    }
 
     campos.forEach(campo => {
       if (!campo.visivel) return;
-
       let input;
       if (campo.tipo === "select") {
         input = document.createElement("select");
@@ -35,7 +45,6 @@
         input.type = campo.tipo;
         input.placeholder = campo.nome.charAt(0).toUpperCase() + campo.nome.slice(1);
       }
-
       input.name = campo.nome;
       if (campo.obrigatorio) input.required = true;
       container.appendChild(input);
@@ -43,4 +52,3 @@
   </script>
 </body>
 </html>
-
