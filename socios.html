@@ -27,4 +27,56 @@
 
   <div class="socio-list" id="lista"></div>
 
-  <a class="back-link" href="index.html">← Voltar ao painel
+  <a class="back-link" href="index.html">← Voltar ao painel</a>
+
+  <script>
+    const sheetID = '1v5Zf8fxY-cIq8xw0G8hoeHDRUAXzpDmGEj16qf4_LhQ';
+    const apiKey = 'AIzaSyBbb8_6fOmFweuLmla-mQz3MolkQqLPk1w';
+    const range = 'Folha1!A2:F';
+    let todos = [];
+
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/${range}?key=${apiKey}`)
+      .then(res => res.json())
+      .then(data => {
+        todos = data.values || [];
+        mostrar(todos);
+      })
+      .catch(err => {
+        document.getElementById("lista").innerHTML = "<p>Erro ao carregar dados.</p>";
+        console.error(err);
+      });
+
+    function mostrar(lista) {
+      const container = document.getElementById("lista");
+      container.innerHTML = "";
+      lista.forEach(linha => {
+        const [nome, email, telefone, categoria, data, endereco] = linha;
+        const card = document.createElement("div");
+        card.className = "socio-card";
+        card.innerHTML = `
+          <strong>${nome}</strong><br>
+          ${email ? `📧 ${email}<br>` : ""}
+          ${telefone ? `📞 ${telefone}<br>` : ""}
+          ${categoria ? `📌 ${categoria}<br>` : ""}
+          ${data ? `📅 ${data}<br>` : ""}
+          ${endereco ? `🏠 ${endereco}` : ""}
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function filtrar(categoria) {
+      document.querySelectorAll(".filters button").forEach(btn => btn.classList.remove("active"));
+      document.querySelector(`.filters button[onclick="filtrar('${categoria}')"]`).classList.add("active");
+
+      if (categoria === "Todos") {
+        mostrar(todos);
+      } else {
+        const filtrados = todos.filter(linha => linha[3] === categoria);
+        mostrar(filtrados);
+      }
+    }
+  </script>
+
+</body>
+</html>
