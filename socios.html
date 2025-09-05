@@ -155,5 +155,56 @@
       );
       mostrar(filtrados);
     }
+    }
 
-    function
+    function filtrarPesquisa() {
+      const termo = document.getElementById("pesquisa").value.toLowerCase();
+      const filtrados = visiveis.filter(linha =>
+        linha[0]?.toLowerCase().includes(termo) || linha[1]?.toLowerCase().includes(termo)
+      );
+      mostrar(filtrados);
+    }
+
+    function ordenarPorNome() {
+      visiveis.sort((a, b) => a[0].localeCompare(b[0]));
+      mostrar(visiveis);
+    }
+
+    function ordenarPorData() {
+      visiveis.sort((a, b) => new Date(b[4]) - new Date(a[4]));
+      mostrar(visiveis);
+    }
+
+    function exportarCSV() {
+      let csv = "Nome,Email,Telefone,Categoria,Data,Endereço\n";
+      visiveis.forEach(linha => {
+        csv += linha.slice(0, 6).map(c => `"${c}"`).join(",") + "\n";
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "socios.csv";
+      link.click();
+    }
+
+    function repor() {
+      document.getElementById("pesquisa").value = "";
+      visiveis = [...todos];
+      mostrar(visiveis);
+      document.querySelectorAll(".filters button").forEach(btn => btn.classList.remove("active"));
+      document.querySelector(`.filters button[onclick="filtrarCategoria('Todos')"]`).classList.add("active");
+    }
+
+    function atualizarContadores(lista) {
+      const total = lista.length;
+      const ativos = lista.filter(l => l[3] === "Ativo").length;
+      const inativos = lista.filter(l => l[3] === "Inativo").length;
+      const pendentes = lista.filter(l => l[3] === "Pendente").length;
+      document.getElementById("contadores").innerText =
+        `Total: ${total} | Ativos: ${ativos} | Inativos: ${inativos} | Pendentes: ${pendentes}`;
+    }
+  </script>
+</body>
+</html>
+
+
