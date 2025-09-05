@@ -6,9 +6,12 @@
   <style>
     body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 2em; }
     h1 { text-align: center; margin-bottom: 1em; }
-    .filters { text-align: center; margin-bottom: 2em; }
+    .top-bar { text-align: center; margin-bottom: 2em; }
+    .top-bar input { padding: 0.5em; width: 250px; margin-right: 1em; }
+    .top-bar button { padding: 0.5em 1em; margin: 0.3em; border: none; border-radius: 4px; cursor: pointer; background: #0078d4; color: white; }
     .filters button { background: #ddd; border: none; padding: 0.5em 1em; margin: 0 0.3em; border-radius: 4px; cursor: pointer; }
     .filters .active { background: #0078d4; color: white; }
+    .stats { text-align: center; margin-bottom: 1em; font-weight: bold; }
     .socio-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1em; }
     .socio-card { background: white; padding: 1em; border-radius: 6px; box-shadow: 0 0 5px rgba(0,0,0,0.05); }
     .back-link { display: block; text-align: center; margin-top: 2em; text-decoration: none; color: #0078d4; font-weight: bold; }
@@ -18,15 +21,23 @@
 
   <h1>Lista de Sócios</h1>
 
-  <div class="filters">
-    <button class="active" onclick="filtrar('Todos')">Todos</button>
-    <button onclick="filtrar('Ativo')">Ativo</button>
-    <button onclick="filtrar('Inativo')">Inativo</button>
-    <button onclick="filtrar('Pendente')">Pendente</button>
+  <div class="top-bar">
+    <input type="text" id="pesquisa" placeholder="Pesquisar por nome ou email" oninput="filtrarPesquisa()" />
+    <button onclick="exportarCSV()">Exportar CSV</button>
+    <button onclick="ordenarPorNome()">Ordenar por Nome</button>
+    <button onclick="ordenarPorData()">Ordenar por Data</button>
+    <button onclick="repor()">Limpar Filtros</button>
   </div>
 
-  <div class="socio-list" id="lista"></div>
+  <div class="filters">
+    <button class="active" onclick="filtrarCategoria('Todos')">Todos</button>
+    <button onclick="filtrarCategoria('Ativo')">Ativo</button>
+    <button onclick="filtrarCategoria('Inativo')">Inativo</button>
+    <button onclick="filtrarCategoria('Pendente')">Pendente</button>
+  </div>
 
+  <div class="stats" id="contadores"></div>
+  <div class="socio-list" id="lista"></div>
   <a class="back-link" href="index.html">← Voltar ao painel</a>
 
   <script>
@@ -34,16 +45,15 @@
     const apiKey = 'AIzaSyBbb8_6fOmFweuLmla-mQz3MolkQqLPk1w';
     const range = 'Folha1!A2:F';
     let todos = [];
+    let visiveis = [];
 
     fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/${range}?key=${apiKey}`)
       .then(res => res.json())
       .then(data => {
         todos = data.values || [];
-        mostrar(todos);
-      })
-      .catch(err => {
-        document.getElementById("lista").innerHTML = "<p>Erro ao carregar dados.</p>";
-        console.error(err);
+        visiveis = [...todos];
+        mostrar(visiveis);
+        atualizarContadores(todos);
       });
 
     function mostrar(lista) {
@@ -65,21 +75,60 @@
       });
     }
 
-    function filtrar(categoria) {
+    function filtrarCategoria(cat) {
       document.querySelectorAll(".filters button").forEach(btn => btn.classList.remove("active"));
-      document.querySelector(`.filters button[onclick="filtrar('${categoria}')"]`).classList.add("active");
+      document.querySelector(`.filters button[onclick="filtrarCategoria('${cat}')"]`).classList.add("active");
+      visiveis = cat === "Todos" ? [...todos] : todos.filter(linha => linha[3] === cat);
+      mostrar(visiveis);
+    }
 
-      if (categoria === "Todos") {
-        mostrar(todos);
-      } else {
-        const filtrados = todos.filter(linha => linha[3] === categoria);
-        mostrar(filtrados);
-      }
+    function filtrarPesquisa() {
+      const termo = document.getElementById("pesquisa").value.toLowerCase();
+      const filtrados = visiveis.filter(linha =>
+        linha[0]?.toLowerCase().includes(termo) || linha[1]?.toLowerCase().includes(termo)
+      );
+      mostrar(filtrados);
+    }
+
+    function exportarCSV() {
+      let csv = "Nome,Email,Telefone,Categoria,Data,Endereço\n";
+      visiveis.forEach(linha => {
+        csv += linha.map(c => `"${c}"`).join(",") + "\n";
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "socios.csv";
+      link.click();
+    }
+
+    function ordenarPorNome() {
+      visiveis.sort((a, b) => a[0].localeCompare(b[0]));
+      mostrar(visiveis);
+    }
+
+    function ordenarPorData() {
+      visiveis.sort((a, b) => new Date(b[4]) - new Date(a[4]));
+      mostrar(visiveis);
+    }
+
+    function repor() {
+      document.getElementById("pesquisa").value = "";
+      visiveis = [...todos];
+      mostrar(visiveis);
+      document.querySelectorAll(".filters button").forEach(btn => btn.classList.remove("active"));
+      document.querySelector(`.filters button[onclick="filtrarCategoria('Todos')"]`).classList.add("active");
+    }
+
+    function atualizarContadores(lista) {
+      const total = lista.length;
+      const ativos = lista.filter(l => l[3] === "Ativo").length;
+      const inativos = lista.filter(l => l[3] === "Inativo").length;
+      const pendentes = lista.filter(l => l[3] === "Pendente").length;
+      document.getElementById("contadores").innerText =
+        `Total: ${total} | Ativos: ${ativos} | Inativos: ${inativos} | Pendentes: ${pendentes}`;
     }
   </script>
 
 </body>
 </html>
-
-
-
