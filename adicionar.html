@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Adicionar Sócio</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 2em; text-align: center; }
+    form { background: white; padding: 2em; border-radius: 8px; max-width: 600px; margin: auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, select, button { display: block; width: 100%; margin-bottom: 1em; padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #0078d4; color: white; font-weight: bold; cursor: pointer; border: none; }
+    a { display: block; margin-top: 1em; text-decoration: none; color: #0078d4; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Adicionar Sócio</h1>
+  <form id="formulario" method="GET" target="_blank" action="https://script.google.com/macros/s/AKfycbwb-CQFaOoxBWtaK8F3t109Y1YpxhctcHCPDdY7iqi-8WWntticm_Kb6eb7A780RCsi/exec">
+    <div id="campos-dinamicos"></div>
+    <button type="submit">Submeter</button>
+  </form>
+  <a href="index.html">← Voltar ao painel</a>
+  <script>
+    const container = document.getElementById("campos-dinamicos");
+    const campos = JSON.parse(localStorage.getItem("camposConfigurados") || "[]");
+
+    campos.forEach(campo => {
+      if (!campo.visivel) return;
+
+      let input;
+      if (campo.tipo === "select") {
+        input = document.createElement("select");
+        input.innerHTML = `<option value="">Seleciona ${campo.nome}</option>` +
+          campo.opcoes.map(op => `<option value="${op}">${op}</option>`).join("");
+      } else {
+        input = document.createElement("input");
+        input.type = campo.tipo;
+        input.placeholder = campo.nome.charAt(0).toUpperCase() + campo.nome.slice(1);
+      }
+
+      input.name = campo.nome;
+      if (campo.obrigatorio) input.required = true;
+      container.appendChild(input);
+    });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerir Campos</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 2em; text-align: center; }
+    .campo, .editar { background: white; padding: 1em; margin: 1em auto; max-width: 600px; border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    input[type="text"], select, textarea { width: 80%; padding: 0.5em; margin-bottom: 0.5em; }
+    label { margin-left: 1em; }
+    button { margin: 0.3em; padding: 0.6em 1.2em; background: #0078d4; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li { margin-bottom: 0.5em; background: #fff; padding: 0.5em; border-radius: 4px; box-shadow: 0 0 3px rgba(0,0,0,0.1); }
+    .controls { margin-top: 0.5em; }
+    a { display: block; margin-top: 2em; color: #0078d4; font-weight: bold; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <h1>Gerir Campos do Formulário</h1>
+
+  <div class="campo">
+    <input type="text" id="novoCampo" placeholder="Nome do campo" />
+    <select id="tipoCampo">
+      <option value="text">Texto</option>
+      <option value="email">Email</option>
+      <option value="number">Número</option>
+      <option value="date">Data</option>
+      <option value="select">Seleção</option>
+    </select>
+    <label><input type="checkbox" id="visivel"> Mostrar</label>
+    <label><input type="checkbox" id="obrigatorio"> Obrigatório</label>
+    <textarea id="opcoesCampo" placeholder="Opções (separadas por vírgulas)" style="display:none;"></textarea>
+    <button onclick="adicionarCampo()">Adicionar Campo</button>
+  </div>
+
+  <ul id="listaCampos"></ul>
+
+  <button onclick="guardar()">Guardar Configuração</button>
+  <a href="adicionar.html">→ Ir para o formulário</a>
+
+  <script>
+    let campos = [];
+
+    document.getElementById("tipoCampo").addEventListener("change", e => {
+      document.getElementById("opcoesCampo").style.display = e.target.value === "select" ? "block" : "none";
+    });
+
+    function adicionarCampo() {
+      const nome = document.getElementById("novoCampo").value.trim();
+      const tipo = document.getElementById("tipoCampo").value;
+      const visivel = document.getElementById("visivel").checked;
+      const obrigatorio = document.getElementById("obrigatorio").checked;
+      const opcoes = document.getElementById("opcoesCampo").value.split(",").map(o => o.trim()).filter(o => o);
+
+      if (!nome) return alert("Insere um nome para o campo.");
+
+      campos.push({ nome, tipo, visivel, obrigatorio, opcoes });
+      limparInputs();
+      atualizarLista();
+    }
+
+    function limparInputs() {
+      document.getElementById("novoCampo").value = "";
+      document.getElementById("visivel").checked = false;
+      document.getElementById("obrigatorio").checked = false;
+      document.getElementById("opcoesCampo").value = "";
+      document.getElementById("opcoesCampo").style.display = "none";
+    }
+
+    function removerCampo(index) {
+      campos.splice(index, 1);
+      atualizarLista();
+    }
+
+    function mover(index, direcao) {
+      const novoIndex = index + direcao;
+      if (novoIndex < 0 || novoIndex >= campos.length) return;
+      [campos[index], campos[novoIndex]] = [campos[novoIndex], campos[index]];
+      atualizarLista();
+    }
+
+    function editarCampo(index) {
+      const campo = campos[index];
+      document.getElementById("novoCampo").value = campo.nome;
+      document.getElementById("tipoCampo").value = campo.tipo;
+      document.getElementById("visivel").checked = campo.visivel;
+      document.getElementById("obrigatorio").checked = campo.obrigatorio;
+      document.getElementById("opcoesCampo").value = campo.opcoes.join(", ");
+      document.getElementById("opcoesCampo").style.display = campo.tipo === "select" ? "block" : "none";
+      removerCampo(index);
+    }
+
+    function atualizarLista() {
+      const ul = document.getElementById("listaCampos");
+      ul.innerHTML = "";
+      campos.forEach((campo, i) => {
+        ul.innerHTML += `<li>
+          <strong>${campo.nome}</strong> (${campo.tipo}) ${campo.visivel ? "👁️" : "🚫"} ${campo.obrigatorio ? "🔒" : ""}
+          ${campo.tipo === "select" ? `<br><small>Opções: ${campo.opcoes.join(", ")}</small>` : ""}
+          <div class="controls">
+            <button onclick="mover(${i}, -1)">↑</button>
+            <button onclick="mover(${i}, 1)">↓</button>
+            <button onclick="editarCampo(${i})">Editar</button>
+            <button onclick="removerCampo(${i})">Remover</button>
+          </div>
+        </li>`;
+      });
+    }
+
+    function guardar() {
+      localStorage.setItem("camposConfigurados", JSON.stringify(campos));
+      alert("Configuração guardada!");
+    }
+
+    window.onload = () => {
+      const guardados = JSON.parse(localStorage.getItem("camposConfigurados") || "[]");
+      campos = guardados;
+      atualizarLista();
+    };
+  </script>
+
+</body>
+</html>
