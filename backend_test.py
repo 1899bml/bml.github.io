@@ -132,7 +132,7 @@ class BackendTester:
             response = requests.get(f"{BASE_URL}/socios/{socio_id}", timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                if data["id"] == socio_id and data["nome"] == expected_name:
+                if data["_id"] == socio_id and data["nome"] == expected_name:
                     self.log_result(f"Get Socio ({expected_name})", True, f"Retrieved successfully")
                     return True
                 else:
