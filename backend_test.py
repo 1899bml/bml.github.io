@@ -114,10 +114,10 @@ class BackendTester:
             response = requests.post(f"{BASE_URL}/socios", json=socio_data, headers=HEADERS, timeout=10)
             if response.status_code == 201:
                 data = response.json()
-                if "id" in data and data["email"] == socio_data["email"]:
-                    self.created_socios.append(data["id"])
-                    self.log_result(f"Create Socio ({socio_data['nome']})", True, f"ID: {data['id']}")
-                    return data["id"]
+                if "_id" in data and data["email"] == socio_data["email"]:
+                    self.created_socios.append(data["_id"])
+                    self.log_result(f"Create Socio ({socio_data['nome']})", True, f"ID: {data['_id']}")
+                    return data["_id"]
                 else:
                     self.log_result(f"Create Socio ({socio_data['nome']})", False, "Invalid response structure")
             else:
