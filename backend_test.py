@@ -218,10 +218,11 @@ class BackendTester:
         """Test POST /api/socios/import"""
         print("\n🔍 Testing Bulk Import...")
         
+        import_timestamp = str(int(time.time()) + 1)
         import_data = [
             {
                 "nome": "Roberto Silva Import",
-                "email": "roberto.import@email.com",
+                "email": f"roberto.import.{import_timestamp}@email.com",
                 "telefone": "(11) 91234-5678",
                 "categoria": "ativo",
                 "data_ingresso": "2023-08-15",
@@ -229,7 +230,7 @@ class BackendTester:
             },
             {
                 "nome": "Fernanda Import Costa",
-                "email": "fernanda.import@email.com",
+                "email": f"fernanda.import.{import_timestamp}@email.com",
                 "telefone": "(21) 98765-4321",
                 "categoria": "normal",
                 "data_ingresso": "2023-09-01",
