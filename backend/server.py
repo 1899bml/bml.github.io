@@ -1,20 +1,44 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import IndexModel
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from enum import Enum
 import os
 import uuid
+import pandas as pd
+import io
+import json
 from contextlib import asynccontextmanager
+import tempfile
 
 # Pydantic Models
 class StatusEnum(str, Enum):
     ativo = "ativo"
     inativo = "inativo"
     normal = "normal"
+
+class FieldType(str, Enum):
+    text = "text"
+    email = "email" 
+    phone = "phone"
+    date = "date"
+    select = "select"
+    textarea = "textarea"
+    number = "number"
+
+class CustomField(BaseModel):
+    id: str = Field(..., description="ID único do campo")
+    name: str = Field(..., description="Nome do campo")
+    label: str = Field(..., description="Label exibido")
+    field_type: FieldType = Field(..., description="Tipo do campo")
+    required: bool = Field(default=False, description="Campo obrigatório")
+    options: Optional[List[str]] = Field(default=None, description="Opções para select")
+    default_value: Optional[str] = Field(default=None, description="Valor padrão")
+    order: int = Field(default=0, description="Ordem de exibição")
 
 class SocioBase(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200)
@@ -23,6 +47,7 @@ class SocioBase(BaseModel):
     categoria: StatusEnum = StatusEnum.ativo
     data_ingresso: date
     endereco: Optional[str] = Field(None, max_length=500)
+    custom_fields: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 class SocioCreate(SocioBase):
     pass
@@ -34,6 +59,7 @@ class SocioUpdate(BaseModel):
     categoria: Optional[StatusEnum] = None
     data_ingresso: Optional[date] = None
     endereco: Optional[str] = Field(None, max_length=500)
+    custom_fields: Optional[Dict[str, Any]] = None
 
 class Socio(SocioBase):
     id: str = Field(..., alias="_id")
@@ -54,12 +80,15 @@ class SocioStats(BaseModel):
     normais: int
     novos_este_mes: int
 
-class SocioFilter(BaseModel):
-    nome: Optional[str] = None
-    email: Optional[str] = None
-    categoria: Optional[StatusEnum] = None
-    data_inicio: Optional[date] = None
-    data_fim: Optional[date] = None
+class ImportResult(BaseModel):
+    success_count: int
+    error_count: int
+    errors: List[str]
+    message: str
+
+class ExportRequest(BaseModel):
+    format: str = Field(..., description="Formato: 'excel' ou 'csv'")
+    include_custom_fields: bool = Field(default=True)
 
 # Database connection
 client = None
@@ -80,6 +109,12 @@ async def lifespan(app: FastAPI):
         IndexModel("data_ingresso")
     ])
     
+    # Ensure custom_fields collection exists
+    await db.custom_fields.create_indexes([
+        IndexModel("name", unique=True),
+        IndexModel("order")
+    ])
+    
     yield
     
     # Shutdown
@@ -88,8 +123,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Sistema de Gestão de Sócios",
-    description="API para gestão de sócios de associação",
-    version="1.0.0",
+    description="API para gestão de sócios de associação com campos customizáveis",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -121,6 +156,80 @@ def parse_from_mongo(item):
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
+# Custom Fields Management
+@app.get("/api/custom-fields", response_model=List[CustomField])
+async def get_custom_fields():
+    """Listar campos customizados"""
+    try:
+        fields = await db.custom_fields.find().sort("order", 1).to_list(length=None)
+        return [CustomField(**field) for field in fields]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar campos: {str(e)}")
+
+@app.post("/api/custom-fields", response_model=CustomField, status_code=201)
+async def create_custom_field(field: CustomField):
+    """Criar novo campo customizado"""
+    try:
+        # Check if field name already exists
+        existing = await db.custom_fields.find_one({"name": field.name})
+        if existing:
+            raise HTTPException(status_code=400, detail="Campo com esse nome já existe")
+        
+        field_dict = field.model_dump()
+        field_dict["_id"] = field.id
+        
+        await db.custom_fields.insert_one(field_dict)
+        return field
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar campo: {str(e)}")
+
+@app.put("/api/custom-fields/{field_id}", response_model=CustomField)
+async def update_custom_field(field_id: str, field_data: CustomField):
+    """Atualizar campo customizado"""
+    try:
+        existing = await db.custom_fields.find_one({"_id": field_id})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Campo não encontrado")
+        
+        # Check if new name conflicts with other fields
+        if field_data.name != existing.get("name"):
+            name_exists = await db.custom_fields.find_one({"name": field_data.name, "_id": {"$ne": field_id}})
+            if name_exists:
+                raise HTTPException(status_code=400, detail="Campo com esse nome já existe")
+        
+        update_data = field_data.model_dump()
+        update_data["_id"] = field_id
+        
+        await db.custom_fields.replace_one({"_id": field_id}, update_data)
+        return field_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar campo: {str(e)}")
+
+@app.delete("/api/custom-fields/{field_id}")
+async def delete_custom_field(field_id: str):
+    """Deletar campo customizado"""
+    try:
+        result = await db.custom_fields.delete_one({"_id": field_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Campo não encontrado")
+        
+        # Remove field from all socios
+        await db.socios.update_many(
+            {},
+            {"$unset": {f"custom_fields.{field_id}": ""}}
+        )
+        
+        return {"message": "Campo deletado com sucesso"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar campo: {str(e)}")
+
+# Socios Management
 @app.get("/api/socios/stats", response_model=SocioStats)
 async def get_socios_stats():
     """Obter estatísticas dos sócios"""
@@ -281,25 +390,117 @@ async def delete_socio(socio_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao deletar sócio: {str(e)}")
 
-@app.post("/api/socios/import")
-async def import_socios(socios: List[SocioCreate]):
-    """Importar múltiplos sócios"""
+# Import/Export Functions
+@app.post("/api/socios/import", response_model=ImportResult)
+async def import_socios_file(file: UploadFile = File(...)):
+    """Importar sócios de arquivo Excel ou CSV"""
     try:
-        created_count = 0
+        # Check file type
+        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use Excel (.xlsx, .xls) ou CSV")
+        
+        # Read file content
+        content = await file.read()
+        
+        # Parse file based on extension
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+        
+        # Get custom fields for mapping
+        custom_fields = await db.custom_fields.find().to_list(length=None)
+        custom_field_names = {field['name'] for field in custom_fields}
+        
+        success_count = 0
         errors = []
         
-        for i, socio_data in enumerate(socios):
+        for index, row in df.iterrows():
             try:
-                # Check if email already exists
-                existing = await db.socios.find_one({"email": socio_data.email})
-                if existing:
-                    errors.append(f"Linha {i+1}: Email {socio_data.email} já cadastrado")
+                # Map standard fields
+                socio_data = {}
+                
+                # Required fields mapping with fallbacks
+                nome_cols = ['nome', 'name', 'Nome', 'Name']
+                email_cols = ['email', 'e-mail', 'Email', 'E-mail'] 
+                
+                nome_val = None
+                email_val = None
+                
+                for col in nome_cols:
+                    if col in row and pd.notna(row[col]):
+                        nome_val = str(row[col]).strip()
+                        break
+                        
+                for col in email_cols:
+                    if col in row and pd.notna(row[col]):
+                        email_val = str(row[col]).strip()
+                        break
+                
+                if not nome_val or not email_val:
+                    errors.append(f"Linha {index+2}: Nome e email são obrigatórios")
                     continue
                 
-                # Create socio document
+                socio_data['nome'] = nome_val
+                socio_data['email'] = email_val
+                
+                # Optional standard fields
+                telefone_cols = ['telefone', 'phone', 'Telefone', 'Phone']
+                for col in telefone_cols:
+                    if col in row and pd.notna(row[col]):
+                        socio_data['telefone'] = str(row[col]).strip()
+                        break
+                
+                categoria_cols = ['categoria', 'status', 'Categoria', 'Status']
+                for col in categoria_cols:
+                    if col in row and pd.notna(row[col]):
+                        val = str(row[col]).strip().lower()
+                        if val in ['ativo', 'inativo', 'normal']:
+                            socio_data['categoria'] = val
+                        break
+                
+                if 'categoria' not in socio_data:
+                    socio_data['categoria'] = 'ativo'
+                
+                endereco_cols = ['endereco', 'endereço', 'address', 'Endereco', 'Endereço', 'Address']
+                for col in endereco_cols:
+                    if col in row and pd.notna(row[col]):
+                        socio_data['endereco'] = str(row[col]).strip()
+                        break
+                
+                data_cols = ['data_ingresso', 'data', 'date', 'Data_Ingresso', 'Data', 'Date']
+                for col in data_cols:
+                    if col in row and pd.notna(row[col]):
+                        try:
+                            if isinstance(row[col], str):
+                                socio_data['data_ingresso'] = pd.to_datetime(row[col]).date()
+                            else:
+                                socio_data['data_ingresso'] = row[col].date() if hasattr(row[col], 'date') else date.today()
+                        except:
+                            pass
+                        break
+                
+                if 'data_ingresso' not in socio_data:
+                    socio_data['data_ingresso'] = date.today()
+                
+                # Map custom fields
+                custom_fields_data = {}
+                for col in row.index:
+                    if col in custom_field_names and pd.notna(row[col]):
+                        custom_fields_data[col] = str(row[col]).strip()
+                
+                if custom_fields_data:
+                    socio_data['custom_fields'] = custom_fields_data
+                
+                # Check if email already exists
+                existing = await db.socios.find_one({"email": socio_data['email']})
+                if existing:
+                    errors.append(f"Linha {index+2}: Email {socio_data['email']} já cadastrado")
+                    continue
+                
+                # Create socio
                 now = datetime.now()
-                socio_dict = socio_data.model_dump()
-                socio_dict = prepare_for_mongo(socio_dict)
+                socio_dict = prepare_for_mongo(socio_data.copy())
                 socio_dict.update({
                     "_id": str(uuid.uuid4()),
                     "created_at": now,
@@ -307,18 +508,161 @@ async def import_socios(socios: List[SocioCreate]):
                 })
                 
                 await db.socios.insert_one(socio_dict)
-                created_count += 1
+                success_count += 1
                 
             except Exception as e:
-                errors.append(f"Linha {i+1}: {str(e)}")
+                errors.append(f"Linha {index+2}: {str(e)}")
         
-        return {
-            "message": f"{created_count} sócios importados com sucesso",
-            "created_count": created_count,
-            "errors": errors
-        }
+        return ImportResult(
+            success_count=success_count,
+            error_count=len(errors),
+            errors=errors[:10],  # Limit to first 10 errors
+            message=f"{success_count} sócios importados com sucesso, {len(errors)} erros"
+        )
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na importação: {str(e)}")
+
+@app.get("/api/socios/export")
+async def export_socios(
+    format: str = Query(..., regex="^(excel|csv)$"),
+    include_custom_fields: bool = Query(default=True)
+):
+    """Exportar sócios para Excel ou CSV"""
+    try:
+        # Get all socios
+        socios = await db.socios.find().to_list(length=None)
+        
+        if not socios:
+            raise HTTPException(status_code=404, detail="Nenhum sócio encontrado para exportar")
+        
+        # Get custom fields for headers
+        custom_fields = []
+        if include_custom_fields:
+            custom_fields = await db.custom_fields.find().sort("order", 1).to_list(length=None)
+        
+        # Prepare data for export
+        export_data = []
+        for socio in socios:
+            socio = parse_from_mongo(socio)
+            row = {
+                'nome': socio.get('nome', ''),
+                'email': socio.get('email', ''),
+                'telefone': socio.get('telefone', ''),
+                'categoria': socio.get('categoria', ''),
+                'data_ingresso': socio.get('data_ingresso', ''),
+                'endereco': socio.get('endereco', ''),
+            }
+            
+            # Add custom fields
+            if include_custom_fields and 'custom_fields' in socio:
+                for field in custom_fields:
+                    field_name = field['name']
+                    row[field_name] = socio['custom_fields'].get(field['id'], '')
+            
+            export_data.append(row)
+        
+        # Create DataFrame
+        df = pd.DataFrame(export_data)
+        
+        # Create temporary file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if format == 'excel':
+            filename = f"socios_export_{timestamp}.xlsx"
+            temp_path = f"/tmp/{filename}"
+            
+            with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Sócios', index=False)
+            
+            return FileResponse(
+                path=temp_path,
+                filename=filename,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+        else:  # CSV
+            filename = f"socios_export_{timestamp}.csv"
+            temp_path = f"/tmp/{filename}"
+            
+            df.to_csv(temp_path, index=False, encoding='utf-8-sig')
+            
+            return FileResponse(
+                path=temp_path,
+                filename=filename,
+                media_type="text/csv"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na exportação: {str(e)}")
+
+@app.get("/api/socios/template")
+async def download_template(format: str = Query(..., regex="^(excel|csv)$")):
+    """Baixar template para importação"""
+    try:
+        # Get custom fields
+        custom_fields = await db.custom_fields.find().sort("order", 1).to_list(length=None)
+        
+        # Create template headers
+        headers = ['nome', 'email', 'telefone', 'categoria', 'data_ingresso', 'endereco']
+        
+        # Add custom field names
+        for field in custom_fields:
+            headers.append(field['name'])
+        
+        # Create sample data
+        sample_data = {
+            'nome': 'João Silva',
+            'email': 'joao@exemplo.com',
+            'telefone': '123456789',
+            'categoria': 'ativo',
+            'data_ingresso': '2024-01-15',
+            'endereco': 'Rua Exemplo, 123'
+        }
+        
+        # Add sample custom field data
+        for field in custom_fields:
+            if field['field_type'] == 'select' and field.get('options'):
+                sample_data[field['name']] = field['options'][0]
+            else:
+                sample_data[field['name']] = f'Exemplo {field["label"]}'
+        
+        df = pd.DataFrame([sample_data])
+        
+        # Create temporary file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if format == 'excel':
+            filename = f"template_socios_{timestamp}.xlsx"
+            temp_path = f"/tmp/{filename}"
+            
+            with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Template', index=False)
+            
+            return FileResponse(
+                path=temp_path,
+                filename=filename,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+        else:  # CSV
+            filename = f"template_socios_{timestamp}.csv"
+            temp_path = f"/tmp/{filename}"
+            
+            df.to_csv(temp_path, index=False, encoding='utf-8-sig')
+            
+            return FileResponse(
+                path=temp_path,
+                filename=filename,
+                media_type="text/csv"
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar template: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
