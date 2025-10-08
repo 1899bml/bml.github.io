@@ -257,10 +257,10 @@ class BackendTester:
         """Test validation scenarios"""
         print("\n🔍 Testing Validation Errors...")
         
-        # Test duplicate email
+        # Test duplicate email - use an email we know exists from our test data
         duplicate_socio = {
             "nome": "Duplicate Test",
-            "email": "maria.santos@email.com",  # Using existing email
+            "email": f"maria.santos.{timestamp}@email.com",  # Using existing email from our test
             "telefone": "(11) 99999-9999",
             "categoria": "ativo",
             "data_ingresso": "2023-10-01",
