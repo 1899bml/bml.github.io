@@ -14,11 +14,14 @@ import sys
 BASE_URL = "https://assoc-members-1.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
-# Test data - realistic association member data
+# Test data - realistic association member data with unique emails
+import time
+timestamp = str(int(time.time()))
+
 TEST_SOCIOS = [
     {
         "nome": "Maria Silva Santos",
-        "email": "maria.santos@email.com",
+        "email": f"maria.santos.{timestamp}@email.com",
         "telefone": "(11) 98765-4321",
         "categoria": "ativo",
         "data_ingresso": "2023-01-15",
@@ -26,7 +29,7 @@ TEST_SOCIOS = [
     },
     {
         "nome": "João Carlos Oliveira",
-        "email": "joao.oliveira@email.com",
+        "email": f"joao.oliveira.{timestamp}@email.com",
         "telefone": "(21) 99876-5432",
         "categoria": "ativo",
         "data_ingresso": "2023-03-20",
@@ -34,7 +37,7 @@ TEST_SOCIOS = [
     },
     {
         "nome": "Ana Paula Costa",
-        "email": "ana.costa@email.com",
+        "email": f"ana.costa.{timestamp}@email.com",
         "telefone": "(31) 97654-3210",
         "categoria": "inativo",
         "data_ingresso": "2022-11-10",
@@ -42,7 +45,7 @@ TEST_SOCIOS = [
     },
     {
         "nome": "Carlos Eduardo Lima",
-        "email": "carlos.lima@email.com",
+        "email": f"carlos.lima.{timestamp}@email.com",
         "telefone": "(41) 96543-2109",
         "categoria": "normal",
         "data_ingresso": "2023-06-05",
