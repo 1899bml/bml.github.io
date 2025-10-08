@@ -107,39 +107,48 @@ user_problem_statement: "Sistema de gestão de sócios para associação com int
 backend:
   - task: "API endpoints para CRUD de sócios"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: "Implementado FastAPI com endpoints para GET/POST/PUT/DELETE sócios, estatísticas, importação em lote. Modelos Pydantic criados com validação."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ TODOS OS ENDPOINTS TESTADOS E FUNCIONANDO: Health check (GET /api/health), Estatísticas (GET /api/socios/stats), CRUD completo (POST/GET/PUT/DELETE /api/socios), Filtros por categoria e nome, Importação em lote (POST /api/socios/import). Todos os 28 testes passaram com 100% de sucesso."
 
   - task: "MongoDB integration com modelos de dados"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: "Configurado MongoDB com AsyncIOMotorClient, índices criados, funções helper para serialização de datas"
+        -working: true
+        -agent: "testing"
+        -comment: "✅ MONGODB FUNCIONANDO PERFEITAMENTE: Conexão estabelecida, índices criados corretamente (email único, nome, categoria, data_ingresso), operações CRUD funcionando, serialização de datas OK, estatísticas sendo calculadas corretamente via agregação."
 
   - task: "Validação e tratamento de erros"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: "Implementada validação com Pydantic, tratamento de erros com HTTPException, verificação de emails únicos"
+        -working: true
+        -agent: "testing"
+        -comment: "✅ VALIDAÇÕES FUNCIONANDO: Emails únicos (400 para duplicados), formato de email válido (422 para inválidos), campos obrigatórios (422 para incompletos), IDs inexistentes (404 para GET/PUT/DELETE), todas as validações Pydantic ativas."
 
 frontend:
   - task: "Interface dashboard com estatísticas"
